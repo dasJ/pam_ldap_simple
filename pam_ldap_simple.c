@@ -4,14 +4,15 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#include <ctype.h>
 #include <ldap.h>
 #include <security/pam_modules.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <syslog.h>
 #include <sys/time.h>
+#include <syslog.h>
 
 #include "pam_ldap_simple.h"
 
@@ -19,6 +20,7 @@ pam_ldap_simple_state_t *allocState() {
 	pam_ldap_simple_state_t *state = calloc(1, sizeof(pam_ldap_simple_state_t));
 
 	state->debug = 0;
+	state->bindpwFile = NULL;
 
 	state->ldapURI = NULL;
 	state->ldapFilter = NULL;
@@ -35,6 +37,9 @@ void freeState(pam_ldap_simple_state_t **state) {
 	s = *state;
 	if (s == NULL)
 		return;
+
+	if (s->bindpwFile != NULL)
+		free(s->bindpwFile);
 
 	if (s->userdn != NULL)
 		free(s->userdn);
@@ -223,6 +228,8 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 			CHECKPOINTER(state->ldapBinddn = strdup(v));
 		else if (!strcasecmp(k, "bindpw"))
 			CHECKPOINTER(state->ldapBindpw = strdup(v));
+		else if (!strcasecmp(k, "bindpwfile"))
+			CHECKPOINTER(state->bindpwFile = strdup(v));
 		else if (!strcasecmp(k, "filter"))
 			CHECKPOINTER(state->ldapFilter = strdup(v));
 		else if (!strcasecmp(k, "debug"))
@@ -249,6 +256,29 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 			else
 				syslog(LOG_ERR, "pam_ldap_simple: unknown deref value %s", v);
 		}
+	}
+
+	/* Handle bindpwfile */
+	if (state->bindpwFile != NULL) {
+		if (state->debug)
+			syslog(LOG_DEBUG, "pam_ldap_simple: reading \"%s\"", state->bindpwFile);
+
+		fp = fopen(state->bindpwFile, "r");
+		if (fp == NULL) {
+			syslog(LOG_ALERT, "pam_ldap_simple: missing file \"%s\"", state->bindpwFile);
+			freeState(&state);
+			return PAM_SERVICE_ERR;
+		}
+		if (!fgets(b, sizeof(b), fp)) {
+			syslog(LOG_ALERT, "pam_ldap_simple: cannot read \"%s\"", state->bindpwFile);
+			freeState(&state);
+			return PAM_SERVICE_ERR;
+		}
+		/* Trailing whitespace */
+		int end = strlen(b);
+		while (isspace(b[end - 1])) end--;
+		b[end] = '\0';
+		CHECKPOINTER(state->ldapBindpw = strdup(b));
 	}
 
 	/* Clear buffer */

@@ -28,6 +28,7 @@ Comments are possible with `#` but the config parser is very primitive.
 - `uri` LDAP server URI
 - `binddn` DN to bind with for searching the user (not setting means anonymous bind)
 - `bindpw` Password for `binddn`
+- `bindpwfile` File to read `bindpw` from, overrides `bindpw`, trailing whitespace is trimmed
 - `filter` LDAP search filter, `%s` is substituted with the (escaped) username, defaults to `(uid=%s)`
 - `scope` LDAP Search scope (`sub`, `one`, `base`), defaults to `sub`
 - `deref` LDAP deref configuration (`never`, `searching`, `finding`, `always`), defaults to `never`
