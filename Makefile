@@ -7,10 +7,10 @@ all: pam_ldap_simple
 pam_ldap_simple: pam_ldap_simple.so
 
 pam_ldap_simple.so: pam_ldap_simple.o
-	$(LD) $(LDFLAGS) $^ -o $@
+	$(LD) $(LDFLAGS) -O3 $^ -o $@
 
 pam_ldap_simple.o: pam_ldap_simple.c pam_ldap_simple.h
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c -O3 $< -o $@
 
 clean:
 	rm pam_ldap_simple.so pam_ldap_simple.o
