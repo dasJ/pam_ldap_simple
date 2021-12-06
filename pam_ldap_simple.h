@@ -20,6 +20,7 @@ typedef struct pam_ldap_simple_state {
 
 	char *configFile;
 	char *bindpwFile;
+	char *escapedUsername;
 	char *userdn;
 
 	LDAP        *ldap;

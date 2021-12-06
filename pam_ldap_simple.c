@@ -44,6 +44,9 @@ void freeState(pam_ldap_simple_state_t **state) {
 	if (s->userdn != NULL)
 		free(s->userdn);
 
+	if (s->escapedUsername != NULL)
+		free(s->escapedUsername);
+
 	if (s->ldap != NULL && s->ldapBound)
 		ldap_unbind_ext(s->ldap, NULL, NULL);
 
@@ -168,8 +171,9 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 	struct timeval timeout;
 	char filter[LDAP_FILT_MAXSIZ];
 	LDAPMessage *msg;
+	struct berval userbv, euserbv;
 	/* Stuff from PAM - not freed */
-	const char *username;
+	const char *raw_username;
 	char *password;
 
 	/* Allocate state */
@@ -306,14 +310,25 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 	}
 
 	/* Get username */
-	rc = pam_get_user(pamh, &username, NULL);
+	rc = pam_get_user(pamh, &raw_username, NULL);
 	if (rc != PAM_SUCCESS) {
 		freeState(&state);
 		return rc;
 	}
 
 	if (state->debug)
-		syslog(LOG_DEBUG, "pam_ldap_simple: username is %s", username);
+		syslog(LOG_DEBUG, "pam_ldap_simple: raw username is %s", raw_username);
+
+	/* Escape the username */
+	userbv.bv_val = (char*) raw_username;
+	userbv.bv_len = strlen(raw_username);
+	if (ldap_bv2escaped_filter_value(&userbv, &euserbv) != 0) {
+		freeState(&state);
+		return PAM_USER_UNKNOWN;
+	}
+	state->escapedUsername = euserbv.bv_val;
+	if (state->debug)
+		syslog(LOG_DEBUG, "pam_ldap_simple: escaped username is %s", state->escapedUsername);
 
 	/* Get password */
 	rc = getAuthtok(pamh, flags);
@@ -376,10 +391,11 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 		return PAM_AUTHINFO_UNAVAIL;
 	}
 	state->ldapBound = 1;
-	memset(cred.bv_val, 0, cred.bv_len + 1);
+	if (state->ldapBindpw != NULL)
+		memset(cred.bv_val, 0, cred.bv_len + 1);
 
 	/* Build filter */
-	if (snprintf(filter, sizeof filter, state->ldapFilter, username) < 0) {
+	if (snprintf(filter, sizeof filter, state->ldapFilter, state->escapedUsername) < 0) {
 		syslog(LOG_ALERT, "pam_ldap_simple: cannot format filter");
 		freeState(&state);
 		return PAM_SERVICE_ERR;
@@ -418,7 +434,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 	/* Count */
 	rc = ldap_count_entries(state->ldap, state->ldapRes);
 	if (rc != 1) {
-		syslog(LOG_ERR, "pam_ldap_simple: not exactly one user returned, got %d for %s", rc, username);
+		syslog(LOG_ERR, "pam_ldap_simple: not exactly one user returned, got %d for %s", rc, state->escapedUsername);
 		freeState(&state);
 		return PAM_USER_UNKNOWN;
 	}
