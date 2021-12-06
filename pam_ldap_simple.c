@@ -433,6 +433,11 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 
 	/* Count */
 	rc = ldap_count_entries(state->ldap, state->ldapRes);
+	if (rc == 0) {
+		syslog(LOG_WARNING, "pam_ldap_simple: no LDAP user found for %s", state->escapedUsername);
+		freeState(&state);
+		return PAM_USER_UNKNOWN;
+	}
 	if (rc != 1) {
 		syslog(LOG_ERR, "pam_ldap_simple: not exactly one user returned, got %d for %s", rc, state->escapedUsername);
 		freeState(&state);
