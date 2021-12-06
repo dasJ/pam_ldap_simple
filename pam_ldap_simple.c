@@ -312,6 +312,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 	/* Get username */
 	rc = pam_get_user(pamh, &raw_username, NULL);
 	if (rc != PAM_SUCCESS) {
+		syslog(LOG_ALERT, "pam_ldap_simple: unable to retrieve the username");
 		freeState(&state);
 		return rc;
 	}
@@ -323,6 +324,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 	userbv.bv_val = (char*) raw_username;
 	userbv.bv_len = strlen(raw_username);
 	if (ldap_bv2escaped_filter_value(&userbv, &euserbv) != 0) {
+		syslog(LOG_ALERT, "pam_ldap_simple: unable to escape the username");
 		freeState(&state);
 		return PAM_USER_UNKNOWN;
 	}
@@ -333,11 +335,13 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 	/* Get password */
 	rc = getAuthtok(pamh, flags);
 	if (rc != PAM_SUCCESS) {
+		syslog(LOG_ALERT, "pam_ldap_simple: unable to get the auth token");
 		freeState(&state);
 		return rc;
 	}
 	rc = pam_get_item(pamh, PAM_AUTHTOK, (const void**) &password);
 	if (rc != PAM_SUCCESS) {
+		syslog(LOG_ALERT, "pam_ldap_simple: unable to get the password");
 		freeState(&state);
 		return rc;
 	}
@@ -472,7 +476,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
 	if (rc != LDAP_SUCCESS) {
 		syslog(LOG_ERR, "pam_ldap_simple: ldap_sasl_bind_s (for %s) %s", state->userdn, ldap_err2string(rc));
 		freeState(&state);
-		return PAM_AUTHINFO_UNAVAIL;
+		return PAM_AUTH_ERR;
 	}
 	state->ldapBound = 1;
 	memset(cred.bv_val, 0, cred.bv_len + 1);
